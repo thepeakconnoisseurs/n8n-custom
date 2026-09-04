@@ -54,6 +54,12 @@ COPY --from=builder /usr/bin/composite /usr/bin/composite
 
 RUN ln -sf /usr/lib/chromium/chromium /usr/bin/chromium
 
+# Upstream quirk (n8nio/runners, e.g. 2.37.9): /usr/local/bin/pnpm symlinks to
+# bin/pnpm.cjs which ships WITHOUT the exec bit (644) — executing `pnpm`
+# fails with "Permission denied" even as root. Fix the bit before use.
+RUN chmod +x /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs \
+             /usr/local/lib/node_modules/pnpm/bin/pnpx.cjs
+
 # --- JS packages (into the task runner's own node_modules) -------------------
 # Anything added here MUST also be allowlisted in n8n-task-runners.json
 # (env-overrides.NODE_FUNCTION_ALLOW_EXTERNAL) or the Code node can't import it.

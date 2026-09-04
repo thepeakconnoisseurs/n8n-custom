@@ -150,6 +150,7 @@ Trigger: push ke `main` yang menyentuh `Dockerfile`, `Dockerfile.runner`,
 | Runner tidak konek ke broker ("connection refused" ke :5679) | `N8N_RUNNERS_TASK_BROKER_URI` salah alamat, atau instance n8n belum set `N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0` (default hanya localhost). | Cek env kedua sisi; URI menunjuk ke container worker/instance yang benar. |
 | `apk: not found` saat coba modif Dockerfile | Memang begitu di image resmi (apk dibuang). | Multi-stage `COPY --from` dari stage Alpine — jangan `RUN apk add` di final stage. |
 | Build runner gagal `MODULE_NOT_FOUND ... corepack/dist/corepack.js` (insiden CI run pertama, 2026-09-04) | Base runner baru pakai Node ≥25 yang **tidak lagi membundel corepack**, dan runtime-nya juga tanpa npm. Resep corepack adalah warisan image lama (Node 24). | Pakai binary `pnpm` langsung (`pnpm add ...`) — memang disertakan n8nio/runners supaya image bisa di-extend. Tambahkan `--config.minimum-release-age=0` (pnpm 11 default menolak dep yang dipublish <24 jam; sama seperti flag build upstream). |
+| `pnpm: Permission denied` (exit 126) saat build runner (insiden CI run kedua, 2026-09-04) | **Bug image resmi n8nio/runners** (terverifikasi pada 2.37.9): symlink `/usr/local/bin/pnpm` menunjuk `bin/pnpm.cjs` yang terbit **tanpa bit eksekusi (mode 644)** — jalankan `pnpm` di image apa adanya pun gagal, bahkan sebagai root. | `RUN chmod +x /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs pnpx.cjs` sebelum dipakai (sudah permanen di Dockerfile.runner). |
 | Paket npm di runner "module not found" padahal sudah di-install | Belum masuk allowlist `NODE_FUNCTION_ALLOW_EXTERNAL`, atau library butuh `N8N_RUNNERS_ALLOW_PROTOTYPE_MUTATION` (lihat tangga §5). | Allowlist dulu; eskalasi tangga bila perlu. |
 | `docker compose up -d --scale n8n-worker=2` error konflik nama | Service memakai `container_name` fixed. | Hapus `container_name` dari service yang ingin di-scale. |
 | Docker Hub menampilkan arsitektur `unknown/unknown` pada tag | Attestasi/provenance buildx. | Nonaktifkan dengan `--provenance=false` (tidak dipakai di pipeline ini). |
@@ -208,3 +209,16 @@ Trigger: push ke `main` yang menyentuh `Dockerfile`, `Dockerfile.runner`,
 - Pelajaran: **resep lama jangan disalin buta** — selalu cek Dockerfile
   base di master n8n saat base `stable` bergeser (kebiasaan ini masuk
   runbook upgrade §8). Gitleaks gate lolos; job build jalan setelah fix.
+
+### 2026-09-04 — Insiden CI #2 & perbaikan (run 33833257597)
+
+- `pnpm: Permission denied` (126). Terverifikasi langsung di dalam image
+  resmi `n8nio/runners:stable` (2.37.9): symlink `/usr/local/bin/pnpm`
+  menunjuk `pnpm.cjs` yang ber-mode 644 (tanpa exec bit) — bug upstream.
+- Fix permanen di Dockerfile.runner: `chmod +x pnpm.cjs pnpx.cjs`.
+- **Prosedur baru**: sebelum push, build & smoke test LOKAL dulu
+  (`docker build -f Dockerfile.runner -t peakwine/n8n-runner:localtest .`
+  + smoke: import playwright-core/libraries JS, `chromium-browser --version`,
+  import paket Python, cek launcher). Build lokal sukses; smoke lulus semua
+  (playwright-core OK, Chromium 149 Alpine, pandas 3.0.5/numpy 2.5.2,
+  launcher + config di tempatnya).
