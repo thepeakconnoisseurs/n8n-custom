@@ -213,6 +213,29 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
   base di master n8n saat base `stable` bergeser (kebiasaan ini masuk
   runbook upgrade §8). Gitleaks gate lolos; job build jalan setelah fix.
 
+### 2026-09-04 — Fase 1+2+3 dieksekusi di produksi (image swap → 2.37.9 → scheduler ON)
+
+- Prasyarat: owner konfirmasi tidak ada workflow puppeteer & belum ada
+  playwright-extra → baris `N8N_RUNNERS_ALLOW_PROTOTYPE_MUTATION` (×3) dan
+  `PUPPETEER_EXECUTABLE_PATH` (×1) dihapus dari compose produksi =
+  pengaman runner kembali standar pabrik.
+- Pra-deploy: `pg_dump` 1,2 GB (format custom, 916 entri TOC, diverifikasi
+  `pg_restore -l`), backup compose, catat image-ID lama (rollback presisi).
+- Compose produksi berubah: 2 baris `image:` → `peakwine/n8n:2.37.9` +
+  `peakwine/n8n-runner:2.37.9`; tambah `name: n8n` (kunci nama project/
+  volume, perilaku identik); 2 env durable scheduler. `.env` tidak disentuh.
+- Hasil: migrasi DB 2.32.7→2.37.9 otomatis mulus; semua workflow
+  ter-aktivasi ulang; runner terdaftar ke broker; eksekusi mengalir
+  (11 selesai/90 dtk); healthz main+webhook HTTP 200; worker healthy ~45 dtk
+  (awal "unhealthy" transisi = loading 30+ workflow, normal).
+- Durable scheduler ON: log `Scheduler started`; tabel baru `scheduled_job`
+  (3 jadwal), `scheduled_task` (10 run termaterialisasi),
+  `workflow_publication_trigger_status` (38 trigger). **Poll triggers
+  sengaja OFF** (docs: belum 100% stabil utk produksi).
+- Rollback: (a) image/env saja = edit compose balik + `up -d`; (b) PENUH =
+  (a) + restore dump `n8n-pre-2.37.9-20260904-1055.dump` — **skema DB sudah
+  termigrasi 2.37.9**, image 2.32.7 lama tidak dijamin kompatibel.
+
 ### 2026-09-04 — Insiden CI #2 & perbaikan (run 33833257597)
 
 - `pnpm: Permission denied` (126). Terverifikasi langsung di dalam image
