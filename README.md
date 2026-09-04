@@ -8,8 +8,8 @@ top of the official **`stable`** release tags — plus a task-runner image with
 
 | Image | Base | Purpose |
 |---|---|---|
-| `trigidigital/n8n-custom` | `n8nio/n8n:stable` | n8n main / webhook processor / worker. Adds `ffmpeg`, `git`, `graphicsmagick`, `jq`, `curl`. Exposes task-broker port `5679`. |
-| `trigidigital/n8n-custom-runner` | `n8nio/runners:stable` | External-mode task runner sidecar (Code node JS + Python). Adds Chromium, Playwright packages, media/image tooling, extra JS/Python libs. |
+| `peakwine/n8n` | `n8nio/n8n:stable` | n8n main / webhook processor / worker. Adds `ffmpeg`, `git`, `graphicsmagick`, `jq`, `curl`. Exposes task-broker port `5679`. |
+| `peakwine/n8n-runner` | `n8nio/runners:stable` | External-mode task runner sidecar (Code node JS + Python). Adds Chromium, Playwright packages, media/image tooling, extra JS/Python libs. |
 
 Both bases are built from n8n's `stable` tag, which n8n publishes for the two
 images **in lockstep from the same commit** — so pairing them satisfies the
@@ -18,9 +18,10 @@ CI resolves the actual n8n version after each build and publishes immutable
 tags:
 
 ```
-trigidigital/n8n-custom:2.37.9            # exact n8n release
-trigidigital/n8n-custom:2.37.9-1a2b3c4    # release + build commit
-trigidigital/n8n-custom:latest            # moving pointer (convenience)
+peakwine/n8n:2.37.9            # exact n8n release
+peakwine/n8n:1a2b3c4           # build commit sha
+peakwine/n8n:2.37.9-1a2b3c4    # release + build commit
+peakwine/n8n:latest            # moving pointer (convenience)
 ```
 
 ## What's inside the runner image

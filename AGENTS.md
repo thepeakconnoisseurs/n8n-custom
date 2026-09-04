@@ -39,7 +39,7 @@ tag image di repo deployment.
 | D3 | Runner **Playwright-only** (puppeteer/puppeteer-extra/stealth dihapus) | Keputusan owner 2026-09-04. Efek samping positif: flag keamanan `N8N_RUNNERS_ALLOW_PROTOTYPE_MUTATION` (docs n8n menyebut puppeteer sebagai contoh pemicunya) tidak perlu dinyalakan di awal. |
 | D4 | Config runner berbasis **stock config resmi** (flag `--disallow-code-generation-from-strings` + `--disable-proto=delete` DIPERTAHANKAN) | Image lama (pendahulu) membuang flag itu demi puppeteer. Sekarang kembali ke default paling ketat; eskalasi hanya bila terbukti perlu (lihat §5). Baseline: `docker/images/runners/n8n-task-runners.json` di repo n8n-io/n8n (master). |
 | D5 | **Tanpa autoscaler** (worker fixed, scale manual via `--scale`) | Keputusan owner 2026-09-04. Karena itu service worker & runner di compose referensi TIDAK memakai `container_name` (container_name memblokir `--scale`). |
-| D6 | Nama image BARU (`n8n-custom`, `n8n-custom-runner`), tidak menimpa image lama | Image lama (`tridi-n8n`/`tridi-n8n-runner` di Docker Hub) tetap utuh = rollback absolut (tinggal kembalikan baris `image:` di repo deployment). |
+| D6 | Image dipublish sebagai **`peakwine/n8n`** + **`peakwine/n8n-runner`** (namespace Docker Hub `peakwine`), tidak menimpa image lama | Konsisten dengan namespace image lain yang sudah dipakai (`peakwine/chatwoot`). Image lama (`trigidigital/tridi-n8n`/`tridi-n8n-runner`) tetap utuh = rollback absolut (tinggal kembalikan baris `image:` di repo deployment). |
 | D7 | Repo publik sejak commit pertama | Sejarah bersih terjamin struktural. Konsekuensi: disiplin secret ketat (§10) + gerbang gitleaks di CI. |
 | D8 | S3/Azure external storage TIDAK dipakai | Docs n8n: fitur berlisensi Business/Enterprise — n8n bahkan menolak start di mode `s3` tanpa lisensi. Edisi komunitas cukup dengan mode `database` (default queue mode sejak 2.0). |
 | D9 | Multi-arch belum diaktifkan (amd64 saja) | Deployment target amd64; build QEMU arm64 memperlambat pipeline. Bisa ditambahkan nanti via buildx `--platform` bila dibutuhkan. |
@@ -117,8 +117,8 @@ Trigger: push ke `main` yang menyentuh `Dockerfile`, `Dockerfile.runner`,
 
 1. Pastikan CI hijau; catat tag versi yang di-publish (lihat job summary).
 2. Di **repo deployment** (bukan di sini): edit `image:` main/webhook/worker
-   → `trigidigital/n8n-custom:<versi>` dan runner →
-   `trigidigital/n8n-custom-runner:<versi>` (versi SAMA untuk keduanya).
+   → `peakwine/n8n:<versi>` dan runner →
+   `peakwine/n8n-runner:<versi>` (versi SAMA untuk keduanya).
 3. `docker compose pull && docker compose up -d`.
 4. Verifikasi: semua container healthy (`/healthz`), log runner menunjukkan
    koneksi ke broker `http://n8n-worker:5679`, lalu uji workflow staging.

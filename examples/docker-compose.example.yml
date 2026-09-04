@@ -24,7 +24,7 @@ x-logging: &default-logging
     max-file: "3"
 
 x-n8n: &service-n8n
-  image: trigidigital/n8n-custom:latest   # pin a versioned tag in real use
+  image: peakwine/n8n:latest   # pin a versioned tag in real use
   restart: unless-stopped
   logging: *default-logging
   environment:
@@ -54,7 +54,7 @@ x-n8n: &service-n8n
     - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
 
 x-task-runner: &service-task-runner
-  image: trigidigital/n8n-custom-runner:latest   # pin a versioned tag in real use
+  image: peakwine/n8n-runner:latest   # pin a versioned tag in real use
   restart: unless-stopped
   logging: *default-logging
   environment:

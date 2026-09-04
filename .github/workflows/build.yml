@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_MAIN: n8n-custom
-  IMAGE_RUNNER: n8n-custom-runner
+  IMAGE_MAIN: n8n
+  IMAGE_RUNNER: n8n-runner
 
 jobs:
   security-scan:
@@ -72,7 +72,7 @@ jobs:
           echo "## Published" >> "$GITHUB_STEP_SUMMARY"
           echo "n8n base release: \`$V\` (from tag \`stable\`, commit \`$SHA7\`)" >> "$GITHUB_STEP_SUMMARY"
           for IMG in "$IMAGE_MAIN" "$IMAGE_RUNNER"; do
-            for TAG in "$V" "$V-$SHA7" "latest"; do
+            for TAG in "$V" "$SHA7" "$V-$SHA7" "latest"; do
               docker tag "$REG/$IMG:build" "$REG/$IMG:$TAG"
               docker push "$REG/$IMG:$TAG"
               echo "- \`$REG/$IMG:$TAG\`" >> "$GITHUB_STEP_SUMMARY"
