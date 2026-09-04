@@ -229,6 +229,23 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
   `/metrics` dari internet (kini HTTP 200 publik!) dan aktifkan
   `N8N_METRICS_INCLUDE_SCHEDULER_METRICS`.
 
+### 2026-09-04 — /metrics diblok dari publik + metrik scheduler aktif
+
+- Arsitektur edge terverifikasi: **Cloudflare → nginx aaPanel (pemegang eksklusif
+  :80/:443)**; OpenLiteSpeed di server yang sama hanya di :7080 tanpa satu pun
+  vhost peakwine (dual webserver terbukti tidak saling menyentuh).
+- Blok `/metrics` + `/metrics/` (`return 404`) disisipkan di seksi
+  `#SERVER-BLOCK` pada `auto.peakwine.id.conf` & `api.peakwine.id.conf`
+  (aaPanel: /www/server/panel/vhost/nginx/). Verifikasi: publik 404 di kedua
+  domain, `127.0.0.1:5678/metrics` tetap 200 (scrape internal), editor +
+  webhook + domain utama + subdomain lain 200 semua. Backup file:
+  `~/backups/nginx/*pre-metrics-block-20260904-1344`.
+- `N8N_METRICS_INCLUDE_SCHEDULER_METRICS=true` aktif; metrik terverifikasi
+  (`n8n_scheduler_tasks_pending 3`, `tasks_due 0`, `oldest_pending_age 0`).
+- ⚠️ Catatan jangka panjang: kalau situs ini di-**hapus lalu dibuat ulang** di
+  aaPanel, vhost di-generate ulang dari template dan blok ini hilang — cek
+  ulang setelah operasi panel semacam itu.
+
 ### 2026-09-04 — Fase 1+2+3 dieksekusi di produksi (image swap → 2.37.9 → scheduler ON)
 
 - Prasyarat: owner konfirmasi tidak ada workflow puppeteer & belum ada
