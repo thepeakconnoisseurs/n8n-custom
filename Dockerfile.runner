@@ -83,11 +83,20 @@ RUN pnpm add --prod --no-lockfile --config.minimum-release-age=0 \
 
 # --- Python packages (into the task runner's venv) ---------------------------
 # Also allowlist in n8n-task-runners.json (N8N_RUNNERS_EXTERNAL_ALLOW).
+# pytz/dateutil/six/tzdata: pandas probes some of these behind try/except;
+# the sandbox import guard turns a blocked probe into a hard "Security
+# violation", so install them AND allowlist them (verified 2026-09-04:
+# pandas.tz_localize crashed with "Import of external package 'pytz' is
+# disallowed" before this).
 RUN /usr/local/bin/uv pip install --python /opt/runners/task-runner-python/.venv/bin/python --no-cache \
         requests \
         pillow \
         pandas \
-        numpy
+        numpy \
+        pytz \
+        python-dateutil \
+        six \
+        tzdata
 
 # Custom launcher config: stock hardened node flags are KEPT (unlike the old
 # image), allowlists extended for the packages above. See n8n-task-runners.json.

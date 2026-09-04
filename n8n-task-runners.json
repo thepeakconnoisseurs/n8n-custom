@@ -53,8 +53,8 @@
 			],
 			"env-overrides": {
 				"PYTHONPATH": "/opt/runners/task-runner-python",
-				"N8N_RUNNERS_STDLIB_ALLOW": "datetime,json,math,os,re,io,base64,hashlib,urllib,subprocess",
-				"N8N_RUNNERS_EXTERNAL_ALLOW": "requests,pillow,PIL,pandas,numpy"
+				"N8N_RUNNERS_STDLIB_ALLOW": "datetime,json,math,os,re,io,base64,hashlib,urllib,subprocess,zoneinfo",
+				"N8N_RUNNERS_EXTERNAL_ALLOW": "requests,pillow,PIL,pandas,numpy,pytz,dateutil,six"
 			}
 		}
 	]
