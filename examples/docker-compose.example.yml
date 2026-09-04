@@ -1,0 +1,173 @@
+# =============================================================================
+# REFERENCE compose for a queue-mode deployment using these images.
+#
+# This file is documentation for fresh installs — the live production compose
+# lives elsewhere (private). Don't try to keep this in byte-for-byte sync with
+# any real deployment; it shows the intended shape.
+#
+# Requires n8n >= 2.0 (task runners always on, N8N_RUNNERS_ENABLED deprecated).
+# Key facts baked in here (per n8n docs):
+#   - Every worker needs its own task-runner sidecar (external mode).
+#   - The task broker listens on the n8n instance; runners connect to :5679.
+#   - N8N_ENCRYPTION_KEY must be identical on main / webhook / worker.
+#   - worker & runner have NO container_name on purpose → `--scale` works:
+#       docker compose up -d --scale n8n-worker=2 --scale n8n-worker-runner=2
+#   - Top-level `name:` pins the compose project (and thus volume names)
+#     regardless of the folder this file is run from.
+# =============================================================================
+name: n8n-custom
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-n8n: &service-n8n
+  image: trigidigital/n8n-custom:latest   # pin a versioned tag in real use
+  restart: unless-stopped
+  logging: *default-logging
+  environment:
+    - N8N_DIAGNOSTICS_ENABLED=false
+    - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+    - N8N_HOST=${N8N_HOST}
+    - N8N_PROTOCOL=https
+    - N8N_EDITOR_BASE_URL=https://${N8N_HOST}
+    - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+    - TZ=${GENERIC_TIMEZONE}
+    # queue mode
+    - EXECUTIONS_MODE=queue
+    - QUEUE_BULL_REDIS_HOST=valkey
+    - QUEUE_BULL_REDIS_PASSWORD=${REDIS_PASSWORD}
+    - QUEUE_HEALTH_CHECK_ACTIVE=true
+    - N8N_GRACEFUL_SHUTDOWN_TIMEOUT=300
+    - OFFLOAD_MANUAL_EXECUTIONS_TO_WORKERS=true
+    # database
+    - DB_TYPE=postgresdb
+    - DB_POSTGRESDB_HOST=postgres
+    - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
+    - DB_POSTGRESDB_USER=${POSTGRES_USER}
+    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    # external task runners (n8n 2.x)
+    - N8N_RUNNERS_MODE=external
+    - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
+    - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+
+x-task-runner: &service-task-runner
+  image: trigidigital/n8n-custom-runner:latest   # pin a versioned tag in real use
+  restart: unless-stopped
+  logging: *default-logging
+  environment:
+    - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+    - N8N_RUNNERS_MAX_CONCURRENCY=${N8N_RUNNERS_MAX_CONCURRENCY:-5}
+    - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=${N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT:-15}
+
+services:
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    command: valkey-server --requirepass "${REDIS_PASSWORD}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+    volumes:
+      - valkey_storage:/data
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      # If bumping to postgres:18 keep the PGDATA line — 18 moved the default
+      # data dir and a missing PGDATA means an empty DB on the volume.
+    volumes:
+      - db_storage:/var/lib/postgresql/data
+      - ../init-postgres.sh:/docker-entrypoint-initdb.d/01-init-postgres.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n:
+    <<: *service-n8n
+    ports:
+      - "127.0.0.1:5678:5678"   # put your reverse proxy / tunnel in front
+    volumes:
+      - n8n_storage:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  n8n-webhook:
+    <<: *service-n8n
+    command: webhook
+    ports:
+      - "127.0.0.1:5679:5678"
+    volumes:
+      - n8n_webhook_storage:/n8n
+    depends_on:
+      n8n:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # No container_name here → scalable with --scale
+  n8n-worker:
+    <<: *service-n8n
+    command: worker
+    stop_grace_period: 5m
+    volumes:
+      - n8n_storage:/home/node/.n8n
+    depends_on:
+      n8n:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:5678/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Task runner sidecar — must scale 1:1 with n8n-worker
+  n8n-worker-runner:
+    <<: *service-task-runner
+    environment:
+      - N8N_RUNNERS_AUTH_TOKEN=${N8N_RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_TASK_BROKER_URI=http://n8n-worker:5679
+      - N8N_RUNNERS_MAX_CONCURRENCY=${N8N_RUNNERS_MAX_CONCURRENCY:-5}
+      - N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT=${N8N_RUNNERS_AUTO_SHUTDOWN_TIMEOUT:-15}
+    depends_on:
+      n8n-worker:
+        condition: service_started
+
+volumes:
+  db_storage:
+  n8n_storage:
+  n8n_webhook_storage:
+  valkey_storage:

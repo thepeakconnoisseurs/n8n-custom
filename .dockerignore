@@ -1,0 +1,20 @@
+# Keep the build context minimal — only Dockerfile*, n8n-task-runners.json
+# are referenced by COPY.
+.git/
+.github/
+examples/
+scripts/
+docs/
+.claude/
+.firecrawl/
+.playwright-cli/
+.agents/
+_bmad*/
+LICENSE
+README.md
+AGENTS.md
+CLAUDE.md
+.gitignore
+.dockerignore
+*.md
+!n8n-task-runners.json

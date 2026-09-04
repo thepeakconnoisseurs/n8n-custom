@@ -1,0 +1,80 @@
+name: Build & Publish Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "Dockerfile.runner"
+      - "n8n-task-runners.json"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: build-images
+  cancel-in-progress: true
+
+env:
+  IMAGE_MAIN: n8n-custom
+  IMAGE_RUNNER: n8n-custom-runner
+
+jobs:
+  security-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin gitleaks
+      - name: Scan history and worktree
+        run: gitleaks detect --redact --verbose
+
+  build:
+    name: Build (stable base) → resolve version → push immutable tags
+    runs-on: ubuntu-latest
+    needs: [security-scan]
+    env:
+      REG: docker.io/${{ secrets.DOCKERHUB_USERNAME }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # --pull forces a fresh resolve of the moving `stable` tags, so every
+      # build records exactly which n8n release it captured.
+      - name: Build both images
+        run: |
+          docker build --pull -t "$REG/$IMAGE_MAIN:build" -f Dockerfile .
+          docker build --pull -t "$REG/$IMAGE_RUNNER:build" -f Dockerfile.runner .
+
+      - name: Resolve n8n version from built image
+        id: ver
+        run: |
+          VERSION="$(docker run --rm --entrypoint n8n "$REG/$IMAGE_MAIN:build" --version | tr -d '[:space:]')"
+          [ -n "$VERSION" ] || { echo "Failed to resolve n8n version" >&2; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved n8n version: $VERSION"
+
+      # Immutable versioned tag + version+sha tag + moving `latest` pointer.
+      # Rollback in production = point compose back at a previous versioned tag.
+      - name: Tag and push
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          SHA7="${GITHUB_SHA::7}"
+          echo "## Published" >> "$GITHUB_STEP_SUMMARY"
+          echo "n8n base release: \`$V\` (from tag \`stable\`, commit \`$SHA7\`)" >> "$GITHUB_STEP_SUMMARY"
+          for IMG in "$IMAGE_MAIN" "$IMAGE_RUNNER"; do
+            for TAG in "$V" "$V-$SHA7" "latest"; do
+              docker tag "$REG/$IMG:build" "$REG/$IMG:$TAG"
+              docker push "$REG/$IMG:$TAG"
+              echo "- \`$REG/$IMG:$TAG\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+          done

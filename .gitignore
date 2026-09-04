@@ -1,0 +1,50 @@
+# ── Secrets & environment (NEVER commit real values) ────────────────────────
+.env
+.env.*
+!.env.example
+*.env
+.env.save
+
+# Local compose overrides often contain real values
+docker-compose.override.yml
+compose.override.yml
+
+# ── Data / backups / dumps ──────────────────────────────────────────────────
+backups/
+*.sql
+*.dump
+*.tar
+*.gz
+restore/
+old-config/
+private/
+
+# ── Local tooling ───────────────────────────────────────────────────────────
+.firecrawl/
+.playwright-cli/
+.claude/
+.claude-local/
+.agents/
+_bmad*/
+skills-lock.json
+.cursor/
+
+# ── Python / Node ───────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+node_modules/
+
+# ── Build artifacts ─────────────────────────────────────────────────────────
+*.service
+
+# ── OS / IDE ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

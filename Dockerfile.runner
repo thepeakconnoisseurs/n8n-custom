@@ -1,0 +1,89 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# n8n-custom — task runner image (Code node sidecar, EXTERNAL mode)
+#
+# Base tag: n8nio/runners:stable — MUST stay version-matched with the n8n
+# base image (Dockerfile). n8n releases both `stable` tags from the same
+# commit, so building both images from `stable` in the same CI run keeps them
+# matched by construction.
+#
+# Browser automation: Playwright ONLY (playwright-core + playwright-extra)
+# against the system Chromium copied in from the builder stage. Puppeteer and
+# its stealth plugin were intentionally removed (decision 2026-09-04).
+#
+# Extending n8nio/runners directly (pnpm add / uv pip install) requires
+# runners >= 1.121.0 per n8n docs; system binaries still need the multi-stage
+# COPY because apk is stripped from the official image.
+# =============================================================================
+ARG ALPINE_VERSION=3.23
+ARG N8N_BASE=stable
+
+FROM alpine:${ALPINE_VERSION} AS builder
+
+RUN apk add --no-cache \
+        chromium \
+        nss \
+        freetype \
+        harfbuzz \
+        ca-certificates \
+        ttf-freefont \
+        ffmpeg \
+        git \
+        openssh-client \
+        graphicsmagick \
+        imagemagick
+
+FROM n8nio/runners:${N8N_BASE}
+
+USER root
+
+# Chromium drags in a large dependency tree — copy whole lib + font trees.
+COPY --from=builder /usr/lib/ /usr/lib/
+COPY --from=builder /usr/share/fonts/ /usr/share/fonts/
+
+COPY --from=builder /usr/bin/chromium-browser /usr/bin/chromium-browser
+COPY --from=builder /usr/bin/ffmpeg /usr/bin/ffmpeg
+COPY --from=builder /usr/bin/ffprobe /usr/bin/ffprobe
+COPY --from=builder /usr/bin/git /usr/bin/git
+COPY --from=builder /usr/bin/gm /usr/bin/gm
+COPY --from=builder /usr/bin/magick /usr/bin/magick
+COPY --from=builder /usr/bin/convert /usr/bin/convert
+COPY --from=builder /usr/bin/identify /usr/bin/identify
+COPY --from=builder /usr/bin/mogrify /usr/bin/mogrify
+COPY --from=builder /usr/bin/composite /usr/bin/composite
+
+RUN ln -sf /usr/lib/chromium/chromium /usr/bin/chromium
+
+# --- JS packages (into the task runner's own node_modules) -------------------
+# Anything added here MUST also be allowlisted in n8n-task-runners.json
+# (env-overrides.NODE_FUNCTION_ALLOW_EXTERNAL) or the Code node can't import it.
+WORKDIR /opt/runners/task-runner-javascript
+RUN /usr/local/bin/node /usr/local/lib/node_modules/corepack/dist/corepack.js pnpm add \
+        playwright-core \
+        playwright-extra \
+        ajv \
+        ajv-formats \
+        lz-string \
+        node-imap \
+        mailparser \
+        tweetnacl \
+        imapflow
+
+# --- Python packages (into the task runner's venv) ---------------------------
+# Also allowlist in n8n-task-runners.json (N8N_RUNNERS_EXTERNAL_ALLOW).
+RUN /usr/local/bin/uv pip install --python /opt/runners/task-runner-python/.venv/bin/python --no-cache \
+        requests \
+        pillow \
+        pandas \
+        numpy
+
+# Custom launcher config: stock hardened node flags are KEPT (unlike the old
+# image), allowlists extended for the packages above. See n8n-task-runners.json.
+COPY n8n-task-runners.json /etc/n8n-task-runners.json
+RUN chmod 644 /etc/n8n-task-runners.json
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+USER runner
+WORKDIR /home/runner
