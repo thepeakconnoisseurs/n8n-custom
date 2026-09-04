@@ -214,6 +214,21 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
   base di master n8n saat base `stable` bergeser (kebiasaan ini masuk
   runbook upgrade §8). Gitleaks gate lolos; job build jalan setelah fix.
 
+### 2026-09-04 — Optimasi queue mode + insiden pandas transitive imports
+
+- Optimasi produksi diterapkan: `EXECUTIONS_DATA_SAVE_ON_PROGRESS=false`
+  (data eksekusi akhir tetap tersimpan — verifikasi UI/log utuh; steady-state
+  DB turun dr 2,1 GB execution_data) dan `LANGCHAIN_TRACING_V2=false`
+  (tracing LangSmith dimatikan, tak dipakai lagi).
+- Insiden "Import of external package 'pytz' is disallowed" di Code node
+  Python produksi → 3 iterasi fix terdokumentasi (allowlist → install deps →
+  `N8N_RUNNERS_ALLOW_TRANSITIVE_IMPORTS=true`), uji end-to-end via workflow
+  canary (2 eksekusi gagal → 1 sukses penuh, tz_localize Asia/Jakarta OK).
+  Lihat baris troubleshooting terbaru di §9.
+- Temuan yang DITUNDA (belum dieksekusi, keputusan owner): blokir
+  `/metrics` dari internet (kini HTTP 200 publik!) dan aktifkan
+  `N8N_METRICS_INCLUDE_SCHEDULER_METRICS`.
+
 ### 2026-09-04 — Fase 1+2+3 dieksekusi di produksi (image swap → 2.37.9 → scheduler ON)
 
 - Prasyarat: owner konfirmasi tidak ada workflow puppeteer & belum ada
