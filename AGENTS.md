@@ -149,6 +149,7 @@ Trigger: push ke `main` yang menyentuh `Dockerfile`, `Dockerfile.runner`,
 | Setelah pindah folder / compose dijalankan dari direktori lain, n8n "hilang semua datanya" (instance kosong) | Compose menamai volume `<project>_<volume>`; project name default = **nama folder**. Folder beda → volume baru kosong. | Selaraskan: jalankan dari folder yang sama, ATAU kunci dengan top-level `name:` di compose. Jangan pernah menghapus volume lama saat panik — datanya masih ada. |
 | Runner tidak konek ke broker ("connection refused" ke :5679) | `N8N_RUNNERS_TASK_BROKER_URI` salah alamat, atau instance n8n belum set `N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0` (default hanya localhost). | Cek env kedua sisi; URI menunjuk ke container worker/instance yang benar. |
 | `apk: not found` saat coba modif Dockerfile | Memang begitu di image resmi (apk dibuang). | Multi-stage `COPY --from` dari stage Alpine — jangan `RUN apk add` di final stage. |
+| Build runner gagal `MODULE_NOT_FOUND ... corepack/dist/corepack.js` (insiden CI run pertama, 2026-09-04) | Base runner baru pakai Node ≥25 yang **tidak lagi membundel corepack**, dan runtime-nya juga tanpa npm. Resep corepack adalah warisan image lama (Node 24). | Pakai binary `pnpm` langsung (`pnpm add ...`) — memang disertakan n8nio/runners supaya image bisa di-extend. Tambahkan `--config.minimum-release-age=0` (pnpm 11 default menolak dep yang dipublish <24 jam; sama seperti flag build upstream). |
 | Paket npm di runner "module not found" padahal sudah di-install | Belum masuk allowlist `NODE_FUNCTION_ALLOW_EXTERNAL`, atau library butuh `N8N_RUNNERS_ALLOW_PROTOTYPE_MUTATION` (lihat tangga §5). | Allowlist dulu; eskalasi tangga bila perlu. |
 | `docker compose up -d --scale n8n-worker=2` error konflik nama | Service memakai `container_name` fixed. | Hapus `container_name` dari service yang ingin di-scale. |
 | Docker Hub menampilkan arsitektur `unknown/unknown` pada tag | Attestasi/provenance buildx. | Nonaktifkan dengan `--provenance=false` (tidak dipakai di pipeline ini). |
@@ -193,3 +194,17 @@ Trigger: push ke `main` yang menyentuh `Dockerfile`, `Dockerfile.runner`,
   stable terbaru (hari terpisah) → 3 = opsional fitur env baru (mis.
   durable scheduler, `N8N_SCHEDULER_ENABLED` +
   `N8N_USE_WORKFLOW_PUBLICATION_SERVICE`, GA sejak n8n 2.36).
+
+### 2026-09-04 — Insiden CI #1 & perbaikan (run 33832994120)
+
+- Gagal di `pnpm add`: resep warisan memanggil corepack via path
+  `/usr/local/lib/node_modules/corepack/...` — Node 26 di base baru tidak
+  lagi membundel corepack, dan runtime tidak punya npm (dikonfirmasi dari
+  Dockerfile resmi `docker/images/runners/Dockerfile` master: pnpm
+  disalinkan sebagai binary mandiri *untuk memudahkan extend*).
+- Fix: `pnpm add --prod --no-lockfile --config.minimum-release-age=0 ...`
+  (flag release-age meniru build upstream; pnpm 11 default menolak
+  dependensi umur <24 jam).
+- Pelajaran: **resep lama jangan disalin buta** — selalu cek Dockerfile
+  base di master n8n saat base `stable` bergeser (kebiasaan ini masuk
+  runbook upgrade §8). Gitleaks gate lolos; job build jalan setelah fix.

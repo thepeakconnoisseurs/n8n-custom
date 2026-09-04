@@ -57,8 +57,14 @@ RUN ln -sf /usr/lib/chromium/chromium /usr/bin/chromium
 # --- JS packages (into the task runner's own node_modules) -------------------
 # Anything added here MUST also be allowlisted in n8n-task-runners.json
 # (env-overrides.NODE_FUNCTION_ALLOW_EXTERNAL) or the Code node can't import it.
+#
+# pnpm ships as a standalone binary in n8nio/runners (kept there specifically
+# so images like this can extend it): Node 25+ no longer bundles corepack and
+# the runtime image has no npm — invoke `pnpm` directly, never via corepack.
+# --config.minimum-release-age=0 mirrors upstream's own build flag (pnpm 11
+# rejects dependencies published less than 24h ago by default).
 WORKDIR /opt/runners/task-runner-javascript
-RUN /usr/local/bin/node /usr/local/lib/node_modules/corepack/dist/corepack.js pnpm add \
+RUN pnpm add --prod --no-lockfile --config.minimum-release-age=0 \
         playwright-core \
         playwright-extra \
         ajv \
