@@ -111,7 +111,10 @@ gerbang gitleaks untuk "ngebut".
 
 Trigger: push ke `main` yang menyentuh `Dockerfile`, `Dockerfile.runner`,
 `n8n-task-runners.json`, atau workflow itu sendiri; plus `workflow_dispatch`
-(manual dari tab Actions).
+(manual dari tab Actions) dengan input opsional `n8n_base` — isi versi pin
+(mis. `2.32.7`) untuk **build paritas**: image baru dengan versi n8n yang
+sama persis dengan yang berjalan di produksi, supaya saat cutover Fase 1
+satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
 
 ## 7. Runbook rilis image → deploy
 

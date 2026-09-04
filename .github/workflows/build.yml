@@ -9,6 +9,11 @@ on:
       - "n8n-task-runners.json"
       - ".github/workflows/build.yml"
   workflow_dispatch:
+    inputs:
+      n8n_base:
+        description: "Base tag for n8nio/n8n & n8nio/runners (e.g. `stable`, or a pinned version like `2.32.7`)"
+        required: false
+        default: "stable"
 
 concurrency:
   group: build-images
@@ -49,11 +54,14 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       # --pull forces a fresh resolve of the moving `stable` tags, so every
-      # build records exactly which n8n release it captured.
+      # build records exactly which n8n release it captured. N8N_BASE lets a
+      # manual dispatch pin an exact version (parity baseline builds).
       - name: Build both images
+        env:
+          N8N_BASE: ${{ inputs.n8n_base || 'stable' }}
         run: |
-          docker build --pull -t "$REG/$IMAGE_MAIN:build" -f Dockerfile .
-          docker build --pull -t "$REG/$IMAGE_RUNNER:build" -f Dockerfile.runner .
+          docker build --pull --build-arg N8N_BASE="$N8N_BASE" -t "$REG/$IMAGE_MAIN:build" -f Dockerfile .
+          docker build --pull --build-arg N8N_BASE="$N8N_BASE" -t "$REG/$IMAGE_RUNNER:build" -f Dockerfile.runner .
 
       - name: Resolve n8n version from built image
         id: ver
