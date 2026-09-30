@@ -159,6 +159,7 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
 | `docker compose up -d --scale n8n-worker=2` error konflik nama | Service memakai `container_name` fixed. | Hapus `container_name` dari service yang ingin di-scale. |
 | Docker Hub menampilkan arsitektur `unknown/unknown` pada tag | Attestasi/provenance buildx. | Nonaktifkan dengan `--provenance=false` (tidak dipakai di pipeline ini). |
 | Error `database files are incompatible with server` setelah bump image postgres | Lompat major version PostgreSQL; data dir tak bisa dibuka versi baru. | Ikuti prosedur upgrade resmi PG (`pg_dumpall` / pg_upgrade). postgres:18+ wajib eksplisit `PGDATA` (default pindah lokasi). |
+| Setelah upgrade base, `chmod`/path pnpm lama mem-fail-kan build runner (`No such file or directory`) | Layout `pnpm` di n8nio/runners berubah antar versi (≤2.37: symlink ke `pnpm.cjs`; 2.41+: binary statis `/usr/local/bin/pnpm`, tanpa `pnpx`). | Jangan salin resep buta — inspeksi base baru (`which pnpm` + `ls -la /usr/local/bin/pnpm`) dan sesuaikan Dockerfile.runner; catat di §11. |
 | Image build sukses tapi versi n8n "diam-diam" beda dari harapan | `stable` adalah tag bergerak — itu sifatnya (D1). | Selalu deploy pakai tag versi (bukan `latest`) yang tercatat di job summary CI. |
 
 ## 10. Aturan keamanan repo publik (WAJIB untuk agent & kontributor)
@@ -281,3 +282,36 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
   import paket Python, cek launcher). Build lokal sukses; smoke lulus semua
   (playwright-core OK, Chromium 149 Alpine, pandas 3.0.5/numpy 2.5.2,
   launcher + config di tempatnya).
+
+### 2026-09-30 — Upgrade base ke n8n 2.41.3 (alpine 3.24, resep disesuaikan)
+
+- Riset: stable resmi = 2.41.3 (rentang 2.38–2.41 tanpa breaking change yang
+  menyentuh task runners/queue mode/scheduler/postgres).
+- Resep berubah (commit `ca676e2`): `ALPINE_VERSION` 3.23→3.24 (base 2.41.3
+  = alpine 3.24), dan **workaround `chmod pnpm.cjs` dihapus** — sejak base
+  2.41.x, `/usr/local/bin/pnpm` = binary statis mandiri (0755) dan `pnpx`
+  sudah tidak ada; path lama `node_modules/pnpm/bin/pnpm.cjs` hilang sehingga
+  chmod lama justru mem-fail-kan build (ketemu di build lokal, sebelum push).
+- Prosedur jalan sesuai runbook: build+smoke lokal dengan pin
+  `N8N_BASE=2.41.3` (JS: playwright-core 1.63/playwright-extra/mailparser OK;
+  Python: pandas 3.0.6/numpy/pytz OK; Chromium 152; main resolve 2.41.3),
+  lalu push + `workflow_dispatch` ter-pin (run 36662018719) → publish
+  `2.41.3` untuk kedua image.
+- Deploy produksi oleh repo deployment: dump DB pra-upgrade (2,1 GB, TOC
+  1.089 entri terverifikasi), 4 container di-recreate, migrasi DB bersih,
+  worker healthy ~20 dtk, launcher js+py registered, eksekusi mengalir.
+- **Temuan (belum ditindak, keputusan terpisah):**
+  (a) `ffmpeg` di image MAIN terindikasi rusak SEJAK build 2.37.9 —
+  libavdevice alpine butuh ~120 lib (libdrm/libxcb/X11/…) yang tidak
+  disalin resep selective-COPY; tidak ada workload yang memakainya di
+  main (semua Code node eksekusi di runner, yang menyalin /usr/lib penuh
+  dan ffmpeg-nya sehat). Fix opsi: COPY /usr/lib penuh (berat, risiko
+  menimpa lib base hardened) vs hapus ffmpeg dari main vs biarkan.
+  (b) Advisory 2.41.x di log worker: default `N8N_RUNNERS_TASK_TIMEOUT`
+  akan diturunkan 300→60 dtk di versi mendatang — deployment disarankan
+  set eksplisit.
+- Canary python (workflow arsip di instance) belum bisa dijalankan saat
+  upgrade ini (MCP instance terputus pasca-restart + workflow terarsip);
+  bukti pengganti: smoke venv lokal + launcher-python registered + tidak
+  ada workflow python aktif di produksi.
+
