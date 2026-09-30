@@ -15,7 +15,7 @@
 # runners >= 1.121.0 per n8n docs; system binaries still need the multi-stage
 # COPY because apk is stripped from the official image.
 # =============================================================================
-ARG ALPINE_VERSION=3.23
+ARG ALPINE_VERSION=3.24
 ARG N8N_BASE=stable
 
 FROM alpine:${ALPINE_VERSION} AS builder
@@ -54,11 +54,10 @@ COPY --from=builder /usr/bin/composite /usr/bin/composite
 
 RUN ln -sf /usr/lib/chromium/chromium /usr/bin/chromium
 
-# Upstream quirk (n8nio/runners, e.g. 2.37.9): /usr/local/bin/pnpm symlinks to
-# bin/pnpm.cjs which ships WITHOUT the exec bit (644) — executing `pnpm`
-# fails with "Permission denied" even as root. Fix the bit before use.
-RUN chmod +x /usr/local/lib/node_modules/pnpm/bin/pnpm.cjs \
-             /usr/local/lib/node_modules/pnpm/bin/pnpx.cjs
+# Upstream quirk history: runners ≤2.37.x shipped /usr/local/bin/pnpm as a
+# symlink to bin/pnpm.cjs WITHOUT the exec bit — needed an explicit chmod +x.
+# Since the 2.41.x images pnpm is a standalone static binary (0755), so the
+# workaround was removed. Re-check here first if `pnpm add` ever fails again.
 
 # --- JS packages (into the task runner's own node_modules) -------------------
 # Anything added here MUST also be allowlisted in n8n-task-runners.json

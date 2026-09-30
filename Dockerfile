@@ -13,7 +13,7 @@
 # builder's Alpine version in sync with the base image's Alpine when upgrading
 # (check with: docker run --rm n8nio/n8n:stable cat /etc/os-release).
 # =============================================================================
-ARG ALPINE_VERSION=3.23
+ARG ALPINE_VERSION=3.24
 ARG N8N_BASE=stable
 
 FROM alpine:${ALPINE_VERSION} AS builder
