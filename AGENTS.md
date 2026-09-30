@@ -315,3 +315,19 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
   bukti pengganti: smoke venv lokal + launcher-python registered + tidak
   ada workflow python aktif di produksi.
 
+### 2026-09-30 — ffmpeg/ffprobe DIHAPUS dari image main (commit `f2e4f22`)
+
+- Keputusan owner (menindak temuan latent-broken di atas): image main tidak
+  perlu ffmpeg — semua pemrosesan media Code node hidup di image runner
+  (yang menyalin `/usr/lib` penuh dan ffmpeg-nya sehat).
+- Local smoke pin `N8N_BASE=2.41.3`: n8n 2.41.3, jq/git/gm/curl OK,
+  ffmpeg+ffprobe hilang. CI re-publish (run 36665183395) menimpa tag
+  `2.41.3` dengan digest baru — **catatan nuansa**: tag `<versi>` BISA
+  tertimpa oleh rebuild versi sama; rollback presisi tetap tersedia via
+  tag `<versi>-<sha7>` lama atau image-ID lokal (mis. main
+  `37e624a8e673` pra-penghapusan ffmpeg).
+- Deployment terapkan bersama pin env `N8N_RUNNERS_TASK_TIMEOUT=300`
+  (advisory 2.41.x) dalam satu `up -d`; semua container healthy, runner
+  js+py registered, ffmpeg terkonfirmasi hilang dari container main.
+
+
