@@ -19,7 +19,6 @@ ARG N8N_BASE=stable
 FROM alpine:${ALPINE_VERSION} AS builder
 
 RUN apk add --no-cache \
-        ffmpeg \
         git \
         openssh-client \
         graphicsmagick \
@@ -36,14 +35,14 @@ USER root
 # Copy binaries and their shared libraries from the builder.
 # NOTE: this exact set is inherited from the previously proven production
 # image — change deliberately, not casually.
-COPY --from=builder /usr/bin/ffmpeg /usr/bin/ffmpeg
-COPY --from=builder /usr/bin/ffprobe /usr/bin/ffprobe
+# ffmpeg/ffprobe REMOVED 2026-09-30 (owner decision): never usable in the
+# main image anyway (selective-COPY can't satisfy alpine ffmpeg's ~120-lib
+# dependency tree — broken-latent since the 2.37.9 build) and all media
+# processing runs in the task runner image, whose ffmpeg works.
 COPY --from=builder /usr/bin/git /usr/bin/git
 COPY --from=builder /usr/bin/gm /usr/bin/gm
 COPY --from=builder /usr/bin/jq /usr/bin/jq
 COPY --from=builder /usr/bin/curl /usr/bin/curl
-COPY --from=builder /usr/lib/libav*.so* /usr/lib/
-COPY --from=builder /usr/lib/libsw*.so* /usr/lib/
 COPY --from=builder /usr/lib/libcurl*.so* /usr/lib/
 COPY --from=builder /usr/lib/libjq*.so* /usr/lib/
 COPY --from=builder /usr/lib/libonig*.so* /usr/lib/
