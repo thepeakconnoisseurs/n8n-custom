@@ -331,3 +331,45 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
   js+py registered, ffmpeg terkonfirmasi hilang dari container main.
 
 
+
+
+### 2026-11-08 — Upgrade base ke n8n 2.46.6 (runner config disinkronkan dgn stock)
+
+- Riset rentang 2.42–2.47: tanpa breaking change yang menyentuh task
+  runners/queue mode/scheduler/postgres. Durable scheduler menjadi default
+  ON di 2.45 (deployment sudah eksplisit ON — netral). Banyak perbaikan
+  queue-mode (claim idle worker, waiting executions, stop job lintas proses).
+- Catatan kanal rilis: `n8nio/n8n:stable` saat riset = **2.46.6**, bukan
+  2.47.x (rilis 2.47.x terbit 40 menit kemudian sebagai kanal beta/latest —
+  pola lama: stable tertinggal satu minor dari newest). Target deploy tetap
+  hasil resolve CI dari tag `stable` (D1).
+- Base 2.46.6: alpine 3.24 (TIDAK berubah dari 2.41.3), Node v26.12.1 di
+  kedua image, `pnpm` tetap binary statis 0755 + `uv` ada → Dockerfile
+  kedua image TIDAK diubah.
+- Perubahan resep SATU-SATUNYA (commit `b057387`): `n8n-task-runners.json`
+  disinkronkan dengan stock config launcher base baru —
+  (a) flag node `--no-experimental-webstorage` di args runner JS
+  (implementasi upstream "Disable Node Web Storage in JS task runners"
+  2.46.0; sekalian menghilangkan warning benign localStorage), dan
+  (b) allowed-env baru `N8N_RUNNERS_GRACEFUL_SHUTDOWN_TIMEOUT` (js+py)
+  serta `N8N_RUNNERS_SHUTDOWN_FORCE_KILL_MARGIN` (js). Allowlist kustom
+  tetap utuh.
+- Gotcha runbook lama: `docker run --rm n8nio/n8n:stable cat /etc/os-release`
+  GAGAL ("Command cat not found") — entrypoint `n8n` mencegat argumen;
+  pakai `--entrypoint /bin/sh ... -c 'cat /etc/os-release'`.
+- Build + smoke lokal PASS semua (n8n 2.46.6; jq/git/gm/curl, ffmpeg absen
+  by design; 3 flag node diterima + import playwright-core/extra/mailparser;
+  pandas/numpy/pytz + tz_localize; Chromium 156; ffmpeg 8.1.3 di runner;
+  launcher config ter-bake benar). CI run 42514169447 hijau → publish
+  `2.46.6` + `2.46.6-b057387` + `b057387` + `latest` kedua image.
+- Deploy produksi oleh repo deployment: dump pra-upgrade 3,7 GB (TOC 1.222),
+  4 container recreate, migrasi DB bersih, semua healthy ±3 mnt, launcher
+  js+py registered, eksekusi mengalir (17 sukses / 0 gagal di 8 mnt pertama).
+- Observasi pasca-deploy (bukan error): WARN `[launcher:js] Found runner
+  unresponsive (1/6)` ×2 beririsan `Runner process exited on idle timeout`
+  — siklus hidup idle-shutdown + respawn runner, tidak berdampak (eksekusi
+  Code node sukses persis di jendela warning tersebut).
+- Canary python workflow (terarsip di instance) kembali TIDAK bisa
+  dijalankan otomatis pasca-restart (pola sama dgn 30 Sep); bukti pengganti:
+  smoke venv lokal PASS + launcher-python registered + eksekusi berjalan
+  normal. Canary manual via UI = tindak lanjut owner.
