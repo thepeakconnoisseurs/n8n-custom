@@ -372,4 +372,8 @@ satu-satunya variabel yang berubah adalah resep image, bukan versi n8n.
 - Canary python workflow (terarsip di instance) kembali TIDAK bisa
   dijalankan otomatis pasca-restart (pola sama dgn 30 Sep); bukti pengganti:
   smoke venv lokal PASS + launcher-python registered + eksekusi berjalan
-  normal. Canary manual via UI = tindak lanjut owner.
+  normal. **Follow-up sesi lanjutan (MCP hidup kembali): canary TUNTAS** —
+  unarchive (kolom DB kini `isArchived` boolean, bukan `archived_at`),
+  eksekusi manual success dgn output `ok:true` + sample tz `+07:00`
+  (pandas/tz_localize utuh — allowlist & transitive imports tak beregresi),
+  lalu diarsipkan kembali.
